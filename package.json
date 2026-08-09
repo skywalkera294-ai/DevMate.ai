@@ -1,0 +1,21 @@
+{
+  "name": "devmate-ai",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @devmate/shared && npm run build -w @devmate/ai && concurrently -n api,web -c blue,green \"npm run start:dev -w @devmate/api\" \"npm run dev -w @devmate/web\"",
+    "build": "npm run build -w @devmate/shared && npm run build -w @devmate/ai && npm run build -w @devmate/api && npm run build -w @devmate/web",
+    "typecheck": "npm run typecheck -w @devmate/shared && npm run typecheck -w @devmate/ai && npm run typecheck -w @devmate/api && npm run typecheck -w @devmate/web",
+    "db:generate": "npm run db:generate -w @devmate/api",
+    "db:push": "npm run db:push -w @devmate/api",
+    "db:seed": "npm run db:seed -w @devmate/api",
+    "lint": "npm run lint -w @devmate/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

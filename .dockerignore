@@ -1,0 +1,14 @@
+node_modules
+dist
+.next
+.git
+.gitignore
+*.log
+.env
+.env.*
+apps/api/prisma/dev.db*
+apps/api/uploads
+uploads
+coverage
+tsconfig.tsbuildinfo
+.DS_Store

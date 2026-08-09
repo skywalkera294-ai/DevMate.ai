@@ -1,0 +1,149 @@
+// DEPLOY VARIANT — used by the production Dockerfile on Render.
+// Local development keeps `schema.prisma` (SQLite). This file is identical
+// except the datasource provider is `postgresql`; the API Dockerfile swaps
+// it into place before `prisma generate` / `prisma db push`.
+// Keep the models in sync with `schema.prisma`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String?
+  avatarUrl    String?
+  provider     String   @default("email") // email | google | github
+  providerId   String?
+  plan         String   @default("free") // free | pro | team
+  scanCountDay Int      @default(0)
+  lastScanDate String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  projects     Project[]
+  scans        Scan[]
+  issues       Issue[]
+  auditLogs    AuditLog[]
+  chats        ChatMessage[]
+  subscription Subscription?
+}
+
+model Subscription {
+  id               String   @id @default(cuid())
+  ownerId          String   @unique
+  owner            User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  provider         String   @default("mock") // stripe | mock
+  plan             String   @default("pro") // pro | team
+  status           String   @default("active") // active | past_due | canceled
+  currentPeriodEnd DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  repoUrl     String?
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  files       ProjectFile[]
+  scans       Scan[]
+  issues      Issue[]
+  chunks      RepoChunk[]
+  chats       ChatMessage[]
+}
+
+model ProjectFile {
+  id         String   @id @default(cuid())
+  projectId  String
+  path       String
+  content    String
+  language   String   @default("other")
+  size       Int      @default(0)
+  uploadedAt DateTime @default(now())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, path])
+}
+
+model RepoChunk {
+  id        String   @id @default(cuid())
+  projectId String
+  path      String
+  content   String
+  embedding String // JSON array of numbers
+  startLine Int      @default(1)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Scan {
+  id         String    @id @default(cuid())
+  projectId  String
+  type       String
+  status     String    @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+  result     String? // JSON ScanResult
+  error      String?
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerId    String
+  owner      User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([ownerId])
+  @@index([type])
+}
+
+model Issue {
+  id           String   @id @default(cuid())
+  projectId    String
+  title        String
+  type         String // BUG | REFACTOR | DOCS | PERFORMANCE | SECURITY | TECH_DEBT
+  severity     String   @default("medium")
+  status       String   @default("OPEN") // OPEN | CLOSED
+  githubNumber Int?
+  createdAt    DateTime @default(now())
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerId      String
+  owner        User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  projectId String
+  role      String // user | assistant
+  content   String
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  ownerId   String
+  action    String
+  detail    String?
+  ip        String?
+  createdAt DateTime @default(now())
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([createdAt])
+}

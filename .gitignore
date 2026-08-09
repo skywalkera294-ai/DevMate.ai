@@ -1,0 +1,21 @@
+node_modules
+dist
+.next
+.env
+.env.local
+.env.*.local
+*.log
+uploads
+coverage
+.git
+.DS_Store
+npm-debug.log*
+
+# local sqlite database (never commit)
+apps/api/prisma/dev.db
+apps/api/prisma/dev.db-journal
+apps/api/prisma/dev.db-*
+*.db-journal
+
+# local typescript build info
+*.tsbuildinfo

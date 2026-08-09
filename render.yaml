@@ -1,0 +1,68 @@
+# DevMate AI — Render Blueprint (free tier)
+# Docs: https://render.com/docs/blueprint-spec
+#
+# HOW TO DEPLOY (free):
+#   1. Create a GitHub repo and push this project (see README).
+#   2. Edit `repo:` below to point at YOUR GitHub URL.
+#   3. On Render → New → Blueprint → connect your repo. This file creates
+#      the API web service, the Web web service, and a free Postgres DB,
+#      wires DATABASE_URL together, and generates a JWT_SECRET.
+#   4. Hit "Apply". After both services deploy, open the web URL and register.
+#
+# The URLs below assume service names are globally unique on Render
+# (`<name>.onrender.com`). If Render assigns a different slug, update the
+# `*_URL` values on the affected service.
+
+services:
+  # ---- API (NestJS) ----
+  - type: web
+    name: devmate-api
+    runtime: docker
+    repo: https://github.com/YOUR_GITHUB_USERNAME/devmate-ai.git
+    plan: free
+    dockerfilePath: ./apps/api/Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: devmate-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://devmate-web.onrender.com
+      # Offline rule engine = zero keys, fully functional. To use a real LLM,
+      # set AI_PROVIDER=openai-compatible and add OPENAI_API_KEY (+ optionally
+      # OPENAI_BASE_URL for OpenRouter/Ollama/Groq/etc.).
+      - key: AI_PROVIDER
+        value: offline
+      - key: AI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_API_KEY
+        value: ""
+      - key: OPENAI_BASE_URL
+        value: https://api.openai.com/v1
+
+  # ---- Web (Next.js standalone) ----
+  - type: web
+    name: devmate-web
+    runtime: docker
+    repo: https://github.com/YOUR_GITHUB_USERNAME/devmate-ai.git
+    plan: free
+    dockerfilePath: ./apps/web/Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # The browser calls same-origin `/api` and Next proxies to the API via
+      # `next.config.mjs` rewrites, so only the runtime value below matters.
+      - key: NEXT_PUBLIC_API_URL
+        value: https://devmate-api.onrender.com/api
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://devmate-web.onrender.com
+
+databases:
+  - name: devmate-db
+    plan: free
