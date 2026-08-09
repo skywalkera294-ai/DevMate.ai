@@ -18,7 +18,7 @@ services:
   - type: web
     name: devmate-api
     runtime: docker
-    repo: https://github.com/YOUR_GITHUB_USERNAME/devmate-ai.git
+    repo: https://github.com/skywalkera294-ai/DevMate.ai.git
     plan: free
     dockerfilePath: ./apps/api/Dockerfile
     healthCheckPath: /api/health
@@ -49,7 +49,7 @@ services:
   - type: web
     name: devmate-web
     runtime: docker
-    repo: https://github.com/YOUR_GITHUB_USERNAME/devmate-ai.git
+    repo: https://github.com/skywalkera294-ai/DevMate.ai.git
     plan: free
     dockerfilePath: ./apps/web/Dockerfile
     healthCheckPath: /
