@@ -45,47 +45,51 @@ OPENAI_API_KEY=sk-...
 OPENAI_BASE_URL=https://api.openai.com/v1   # any OpenAI-compatible endpoint works
 ```
 
-## Deploy to Render (free)
+## Deploy to Koyeb (free)
 
-The project ships a Render blueprint (`render.yaml`) plus production Dockerfiles.
+The app ships as a single combined image (root `Dockerfile`) that runs the
+NestJS API and the Next.js web together, so it fits on Koyeb's **one free
+instance** (512 MB RAM). Data lives in **Supabase** (free Postgres, reliable).
 
-1. **Push to GitHub** — create an empty repo, then:
+1. **Push to GitHub** (already done if you cloned from this repo).
 
-   ```bash
-   cd devmate-ai
-   git init
-   git add .
-   git commit -m "DevMate AI"
-   git remote add origin https://github.com/<you>/devmate-ai.git
-   git push -u origin main
-   ```
+2. **Create the database on [supabase.com](https://supabase.com)** (free):
+   - New project → pick a name/region → set a strong database password → create.
+   - Project Settings → **Database** → scroll to "Connection string" → copy the
+     **Direct connection** URI (port `5432`, `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`).
+   - Append `?sslmode=require` to it. This becomes `DATABASE_URL`.
 
-2. **Edit `render.yaml`** — replace `YOUR_GITHUB_USERNAME` in the two `repo:` fields with your GitHub username.
+3. **Deploy on [koyeb.com](https://koyeb.com)** (free):
+   - Create Web Service → **GitHub** → install the Koyeb GitHub app → select the `DevMate.ai` repo → branch `main`.
+   - Builder: **Dockerfile** (root `Dockerfile`).
+   - Instance type: **Free** (512 MB). Region: Frankfurt or Washington, D.C.
+   - **Port: 8000** (http).
+   - Environment variables:
+     - `DATABASE_URL` — the Supabase URI from step 2
+     - `JWT_SECRET` — any long random string (e.g. `openssl rand -hex 32`)
+     - `NODE_ENV=production`
+     - `AI_PROVIDER=offline`
+     - `FRONTEND_URL=https://<your-app>.koyeb.app` (set after the first deploy, once you have the URL)
+   - Deploy. On first boot the API runs `prisma db push` to create the schema.
 
-3. **Create the blueprint** — on [render.com](https://render.com) → **New → Blueprint** → select your repo. Render provisions three free resources automatically:
-   - `devmate-api` (NestJS) with `DATABASE_URL` wired to the Postgres DB and a generated `JWT_SECRET`
-   - `devmate-web` (Next.js)
-   - `devmate-db` (free Postgres)
-
-4. **Apply** — wait for both services to build and deploy. Open the web URL and register a new account.
-
-Notes about the free tier:
-
-- Free web services **sleep after 15 min idle** and wake on the next request (takes ~30–60 s).
-- Free Postgres **sleeps** and spins back up on the first query after ~10–20 s.
-- Uploaded project files are stored in the database, so they survive restarts; the API **disk is ephemeral**.
-- To upgrade AI to a real LLM later, set `AI_PROVIDER=openai-compatible` and `OPENAI_API_KEY` on the `devmate-api` service (no redeploy needed, hot-restart only).
-
-### Architecture on Render
+### Architecture on Koyeb
 
 ```
-Browser ──> devmate-web.onrender.com ──(server-side /api rewrite)──> devmate-api.onrender.com ──> Postgres
+Browser ──> <app>.koyeb.app:8000 (Next.js) ──/api rewrite──> localhost:4000 (NestJS) ──> Supabase Postgres
 ```
 
-The browser talks only to `devmate-web` (same-origin `/api`), so no CORS concerns. `NEXT_PUBLIC_API_URL` on the web service points the Next server at the API.
+Both processes live in one container; the browser talks only to the Next
+server (same-origin `/api`), so there are no CORS concerns.
+
+Free-tier notes:
+
+- The instance scales to zero after ~1 hour idle and wakes on the next request.
+- The Next.js server listens on `PORT=8000`; the API binds `:4000` internally.
+- Uploaded project files are stored in the database (survive restarts); the container disk is ephemeral.
+- To use a real LLM later, set `AI_PROVIDER=openai-compatible` and `OPENAI_API_KEY` on the service.
 
 ## Production notes
 
-- The local SQLite schema is `apps/api/prisma/schema.prisma`; the deployable Postgres variant is `apps/api/prisma/schema.postgres.prisma` (kept in sync, swapped in by the API Dockerfile before `prisma generate`).
-- Schema migrations on Render run automatically at container start (`prisma db push`).
-- Add Google/GitHub OAuth keys via `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` on the API service.
+- The local SQLite schema is `apps/api/prisma/schema.prisma`; the deployable Postgres variant is `apps/api/prisma/schema.postgres.prisma` (kept in sync, swapped in by the Dockerfile before `prisma generate`).
+- Schema migrations run automatically at container start (`prisma db push`).
+- Add Google/GitHub OAuth keys via `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` on the service.
