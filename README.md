@@ -45,51 +45,74 @@ OPENAI_API_KEY=sk-...
 OPENAI_BASE_URL=https://api.openai.com/v1   # any OpenAI-compatible endpoint works
 ```
 
-## Deploy to Koyeb (free)
+## Deploy for free (Vercel + Render + Supabase)
 
-The app ships as a single combined image (root `Dockerfile`) that runs the
-NestJS API and the Next.js web together, so it fits on Koyeb's **one free
-instance** (512 MB RAM). Data lives in **Supabase** (free Postgres, reliable).
+Free hosting split across three providers (no credit card required):
+- **Web** (Next.js) → **Vercel** (free)
+- **API** (NestJS) → **Render** (free, native Node — no Docker)
+- **Database** → **Supabase** (free Postgres)
 
-1. **Push to GitHub** (already done if you cloned from this repo).
+### 1. Database — Supabase (free)
 
-2. **Create the database on [supabase.com](https://supabase.com)** (free):
-   - New project → pick a name/region → set a strong database password → create.
-   - Project Settings → **Database** → scroll to "Connection string" → copy the
-     **Direct connection** URI (port `5432`, `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`).
-   - Append `?sslmode=require` to it. This becomes `DATABASE_URL`.
+1. New project at [supabase.com](https://supabase.com) → set a strong database password.
+2. Project Settings → **Database** → copy the **Direct connection** URI
+   (`postgresql://postgres.<ref>:<password>@<host>:5432/postgres`).
+3. Append `?sslmode=require` → this is `DATABASE_URL`.
 
-3. **Deploy on [koyeb.com](https://koyeb.com)** (free):
-   - Create Web Service → **GitHub** → install the Koyeb GitHub app → select the `DevMate.ai` repo → branch `main`.
-   - Builder: **Dockerfile** (root `Dockerfile`).
-   - Instance type: **Free** (512 MB). Region: Frankfurt or Washington, D.C.
-   - **Port: 8000** (http).
-   - Environment variables:
-     - `DATABASE_URL` — the Supabase URI from step 2
-     - `JWT_SECRET` — any long random string (e.g. `openssl rand -hex 32`)
-     - `NODE_ENV=production`
-     - `AI_PROVIDER=offline`
-     - `FRONTEND_URL=https://<your-app>.koyeb.app` (set after the first deploy, once you have the URL)
-   - Deploy. On first boot the API runs `prisma db push` to create the schema.
+### 2. API — Render (free)
 
-### Architecture on Koyeb
+1. Sign up at [render.com](https://render.com) → **New → Web Service** → connect GitHub → select the `DevMate.ai` repo, branch `main`.
+2. Runtime auto-detects **Node**. Set:
+   - **Build Command**:
+     ```
+     npm ci && npm run build -w @devmate/shared && npm run build -w @devmate/ai && npm run build -w @devmate/api && cp apps/api/prisma/schema.postgres.prisma apps/api/prisma/schema.prisma && cd apps/api && npx prisma generate
+     ```
+   - **Start Command**:
+     ```
+     cd apps/api && npx prisma db push --skip-generate && node dist/main.js
+     ```
+3. Instance type: **Free**.
+4. **Environment variables**:
+   - `DATABASE_URL` = the Supabase URI
+   - `JWT_SECRET` = any long random string (`openssl rand -hex 32`)
+   - `NODE_ENV` = `production`
+   - `AI_PROVIDER` = `offline`
+   - `FRONTEND_URL` = `https://devmate-web.vercel.app` (update after step 3)
+5. Deploy. On first boot `prisma db push` creates the schema.
+
+The deployed API URL will be `https://devmate-api.onrender.com`.
+
+### 3. Web — Vercel (free)
+
+1. Sign up at [vercel.com](https://vercel.com) → **Add New Project** → import the `DevMate.ai` repo.
+2. **Root Directory**: `apps/web`. Framework preset: **Next.js**.
+3. **Build Command** (builds the shared workspace package first):
+   ```
+   cd ../.. && npm run build -w @devmate/shared && cd apps/web && next build
+   ```
+4. **Environment variables** (set in Project → Settings → Environment Variables):
+   - `NEXT_PUBLIC_API_URL` = `https://devmate-api.onrender.com/api`
+   - `NEXT_PUBLIC_APP_URL` = `https://devmate-web.vercel.app`
+5. Deploy. Then set `FRONTEND_URL` on the Render service to the Vercel URL.
+
+### Architecture
 
 ```
-Browser ──> <app>.koyeb.app:8000 (Next.js) ──/api rewrite──> localhost:4000 (NestJS) ──> Supabase Postgres
+Browser ──> devmate-web.vercel.app (Next.js) ──> devmate-api.onrender.com (NestJS) ──> Supabase Postgres
 ```
 
-Both processes live in one container; the browser talks only to the Next
-server (same-origin `/api`), so there are no CORS concerns.
+The browser calls `NEXT_PUBLIC_API_URL` directly (CORS allows any origin); auth
+uses Bearer tokens, so no cookies/CORS headaches.
 
 Free-tier notes:
 
-- The instance scales to zero after ~1 hour idle and wakes on the next request.
-- The Next.js server listens on `PORT=8000`; the API binds `:4000` internally.
-- Uploaded project files are stored in the database (survive restarts); the container disk is ephemeral.
-- To use a real LLM later, set `AI_PROVIDER=openai-compatible` and `OPENAI_API_KEY` on the service.
+- Render free web services **sleep after ~15 min idle** and wake on the next request (first call takes ~30–60 s).
+- Supabase DB pauses only after ~7 days of inactivity and wakes automatically.
+- Uploaded project files are stored in the database; the API disk is ephemeral.
+- To use a real LLM later, set `AI_PROVIDER=openai-compatible` and `OPENAI_API_KEY` on the Render service.
 
 ## Production notes
 
-- The local SQLite schema is `apps/api/prisma/schema.prisma`; the deployable Postgres variant is `apps/api/prisma/schema.postgres.prisma` (kept in sync, swapped in by the Dockerfile before `prisma generate`).
+- The local SQLite schema is `apps/api/prisma/schema.prisma`; the deployable Postgres variant is `apps/api/prisma/schema.postgres.prisma` (kept in sync, swapped in by the build command before `prisma generate`).
 - Schema migrations run automatically at container start (`prisma db push`).
-- Add Google/GitHub OAuth keys via `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` on the service.
+- Add Google/GitHub OAuth keys via `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` on the Render service.
